@@ -25,18 +25,34 @@ Setup is six steps and takes about 10 minutes.
 
 ## 2. Add the Apps Script backend
 
-1. In the Sheet, go to **Extensions → Apps Script**. This opens the script editor
-   already linked to your spreadsheet (important — the backend relies on this link
-   to find the right sheet).
-2. Delete the placeholder `function myFunction() {}` code in `Code.gs`.
-3. Paste in the entire contents of the `Code.gs` file provided.
-4. Near the top of the file, find:
-   ```js
-   const API_KEY = 'my-journal-secret-2026';
+1. Copy your Sheet's **ID** from its URL — the long string between `/d/` and
+   `/edit`:
    ```
-   Change `'my-journal-secret-2026'` to your own random string. This same string has
-   to be pasted into `index.html` in step 5 — keep the tab open, or copy it somewhere.
-5. Click the **save icon** (or Ctrl/Cmd+S). Name the project, e.g. "Daily Journal API".
+   https://docs.google.com/spreadsheets/d/1a2B3cD4EfGhIjKlMnOpQrStUvWxYz/edit
+                                          └──────────── this part ────────────┘
+   ```
+2. In the Sheet, go to **Extensions → Apps Script**. This opens the script editor
+   (any Apps Script project works — see the note below on why this no longer has
+   to be strictly container-bound).
+3. Delete the placeholder `function myFunction() {}` code in `Code.gs`.
+4. Paste in the entire contents of the `Code.gs` file provided.
+5. Near the top of the file, find and fill in **both** of these:
+   ```js
+   const SHEET_ID = 'PASTE_YOUR_SHEET_ID_HERE';   // paste the ID from step 1
+   const API_KEY = 'my-journal-secret-2026';       // change to your own random string
+   ```
+   The `API_KEY` string also has to be pasted into `index.html` in step 5 below —
+   keep the tab open, or copy it somewhere.
+6. Click the **save icon** (or Ctrl/Cmd+S). Name the project, e.g. "Daily Journal API".
+
+   > **Why a pasted ID instead of "just use the active sheet"?** An earlier version
+   > of this backend used `SpreadsheetApp.getActiveSpreadsheet()`, which only works
+   > reliably when a script is run interactively from inside an open Sheet. It
+   > returns `null` — and throws exactly the error you may have hit if you tested
+   > this already — both when running a function directly from the script editor
+   > and, critically, during real `doPost` web app calls. Using the Sheet's ID
+   > directly works the same way in every context, so it's the more reliable
+   > choice for a script that's going to run as a web app.
 
 ## 3. Run setup once
 
@@ -51,6 +67,9 @@ Setup is six steps and takes about 10 minutes.
 4. Once it finishes, check **View → Logs** (or `Ctrl+Enter`) — you should see
    `Setup complete. "Entries" sheet is ready with 0 existing entries.` A new
    **Entries** tab now exists in your spreadsheet with the header row already in place.
+
+   > If you see `Set SHEET_ID at the top of Code.gs to your spreadsheet ID first`
+   > instead, go back to step 2 — `SHEET_ID` still has the placeholder text in it.
 
 ## 4. Deploy as a Web App
 
@@ -188,4 +207,5 @@ Roughly in order of what's likely to matter most for personal use:
 | Everything worked before, now nothing saves/loads | You edited `Code.gs` but didn't publish a **new version** of the deployment — see "Updating the script later" above. |
 | Browser console shows a CORS error | Double check `index.html` is sending `Content-Type: text/plain;charset=utf-8` (it does, by default, in the code provided) — if you've modified `apiCall()`, this is the most likely culprit. |
 | "Failed to fetch" / network error | Check the URL ends in `/exec` (not `/dev`), and that "Who has access" is set to **Anyone**. |
-| New sheet doesn't appear | Make sure you opened Apps Script via **Extensions → Apps Script** from inside the Sheet itself, not as a separate standalone project — the code relies on `getActiveSpreadsheet()` to find it. |
+| `TypeError: Cannot read properties of null (reading 'getSheetByName')` | `SHEET_ID` at the top of `Code.gs` still has the placeholder text, or has the wrong value — double check it against the ID in your Sheet's URL (step 2). |
+| New sheet doesn't appear | Confirm `SHEET_ID` points at the Sheet you're looking at — it's easy to paste the ID from the wrong tab if you have more than one Sheet open. |

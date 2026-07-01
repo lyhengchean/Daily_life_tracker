@@ -33,6 +33,11 @@
 // the CONFIG.API_KEY constant near the top of index.html.
 const API_KEY = 'my-journal-secret-2026';
 
+// The ID of your Google Sheet — the long string in its URL between
+// /d/ and /edit, e.g. https://docs.google.com/spreadsheets/d/PASTE_THIS_PART/edit
+// Required. See README.md step 2.
+const SHEET_ID = 'PASTE_YOUR_SHEET_ID_HERE';
+
 // The name of the sheet (tab) this script will read from and write to.
 // It will be created automatically the first time the script runs if
 // it doesn't already exist — you don't need to create it by hand.
@@ -286,12 +291,29 @@ function sanitize(value) {
 // =====================================================================
 
 /**
+ * Returns your journal spreadsheet by ID. This deliberately uses
+ * openById() rather than SpreadsheetApp.getActiveSpreadsheet(): "active
+ * spreadsheet" only reliably resolves when a script runs interactively
+ * from inside an open Sheet, and is known to return null both when a
+ * function is run directly from the Apps Script editor and — more
+ * importantly — during actual doPost/doGet web app calls, which this
+ * project relies on constantly. openById() resolves the same way in
+ * every context, so it's the more reliable choice here.
+ */
+function getSpreadsheet() {
+  if (!SHEET_ID || SHEET_ID.indexOf('PASTE_YOUR') !== -1) {
+    throw new Error('Set SHEET_ID at the top of Code.gs to your spreadsheet ID first — see README.md.');
+  }
+  return SpreadsheetApp.openById(SHEET_ID);
+}
+
+/**
  * Returns the Entries sheet, creating it (with headers, a frozen
  * header row, and plain-text formatted data columns) if it doesn't
  * exist yet. Safe to call on every request.
  */
 function getSheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   let sheet = ss.getSheetByName(SHEET_NAME);
 
   if (!sheet) {
