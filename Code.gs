@@ -338,7 +338,36 @@ function getSheet() {
 function rowToEntry(row) {
   const entry = {};
   HEADERS.forEach(function (key, i) { entry[key] = row[i]; });
+  entry.date = normalizeDateString(entry.date);
   return entry;
+}
+
+/**
+ * Google Sheets can silently auto-convert a "YYYY-MM-DD"-looking string
+ * into an actual Date-typed cell — even on a column formatted as plain
+ * text — which is exactly what happened here. When that happens,
+ * getValues() hands back a real JS Date object instead of the string we
+ * wrote, and JSON.stringify() turns THAT into a full ISO timestamp like
+ * "2026-07-01T00:00:00.000Z", which breaks the frontend's date parsing
+ * (hence "Invalid Date" on the card). This normalizes either shape —
+ * the original string, or a Date Sheets converted it to — back to a
+ * clean "YYYY-MM-DD", using the spreadsheet's own timezone so the date
+ * can never shift by a day. Runs on every read, so it fixes existing
+ * rows too, not just newly created ones.
+ */
+function normalizeDateString(value) {
+  if (value instanceof Date) {
+    return Utilities.formatDate(value, getJournalTimeZone(), 'yyyy-MM-dd');
+  }
+  return value;
+}
+
+let _cachedTimeZone = null;
+function getJournalTimeZone() {
+  if (!_cachedTimeZone) {
+    _cachedTimeZone = getSpreadsheet().getSpreadsheetTimeZone();
+  }
+  return _cachedTimeZone;
 }
 
 /** Returns the 1-indexed sheet row number for a given entry id, or -1. */
