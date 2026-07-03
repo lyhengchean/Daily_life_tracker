@@ -28,6 +28,22 @@ let state = {
   theme: 'light'
 };
 
+/* Mood -> soft background tint for the entry-card badge. Reuses existing
+   design tokens rather than introducing new color variables, so adding a
+   mood to the picker only ever needs an entry here. */
+const MOOD_TINTS = {
+  '🤩': 'var(--accent-soft)',
+  '😊': 'var(--accent-soft)',
+  '🙂': 'var(--success-bg)',
+  '😐': 'var(--secondary-soft)',
+  '🙁': 'var(--danger-soft)',
+  '😢': 'var(--danger-soft)',
+  '😡': 'var(--danger-soft)',
+  '😴': 'var(--surface-alt)'
+};
+
+const HEATMAP_WEEKS = 18;
+
 /* =====================================================================
    INITIALIZATION
    ===================================================================== */
@@ -263,14 +279,16 @@ function renderAll() {
 
 function renderDashboard() {
   const stats = computeStats(state.entries);
-  document.getElementById('statTotal').textContent = stats.total;
-  document.getElementById('statStreak').textContent = stats.streak;
-  document.getElementById('statMonth').textContent = stats.thisMonth;
+  animateStatValue(document.getElementById('statTotal'), stats.total);
+  animateStatValue(document.getElementById('statStreak'), stats.streak);
+  animateStatValue(document.getElementById('statMonth'), stats.thisMonth);
   document.getElementById('statMood').textContent = stats.topMood;
 
   const todayStr = toDateStr(new Date());
   const hasToday = state.entries.some(function (e) { return e.date === todayStr; });
   document.getElementById('todayPrompt').classList.toggle('hidden', hasToday);
+
+  renderHeatmap();
 
   const container = document.getElementById('recentEntriesList');
   container.innerHTML = '';
@@ -280,7 +298,91 @@ function renderDashboard() {
     container.appendChild(buildEmptyState('📝', 'No entries yet', 'Start journaling to see your recent entries here.', true));
     return;
   }
-  recent.forEach(function (entry) { container.appendChild(renderEntryCard(entry)); });
+  recent.forEach(function (entry, index) { container.appendChild(renderEntryCard(entry, index)); });
+}
+
+/**
+ * Lightweight count-up for the dashboard's numeric stats — a purely visual
+ * ease from the previously-displayed number to the new one, no effect on
+ * the underlying value. Respects prefers-reduced-motion (a JS rAF loop
+ * isn't covered by the CSS transition-duration override elsewhere in this
+ * file, so it's checked explicitly here).
+ */
+function animateStatValue(el, target) {
+  if (!el) return;
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const start = Number(el.textContent) || 0;
+  if (prefersReducedMotion || start === target) { el.textContent = target; return; }
+
+  const duration = 500;
+  const startTime = performance.now();
+  function tick(now) {
+    const progress = Math.min((now - startTime) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = Math.round(start + (target - start) * eased);
+    if (progress < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+/**
+ * Renders the "Your consistency" heatmap: a compact, contributions-graph-
+ * style grid covering the last HEATMAP_WEEKS weeks (Sun-Sat columns). A
+ * cell is filled if an entry exists for that date. Filled cells are real
+ * <button>s that open the corresponding entry; empty/future cells are
+ * inert <span>s so keyboard and screen-reader navigation skips over them
+ * rather than landing on 100+ do-nothing stops.
+ */
+function renderHeatmap() {
+  const grid = document.getElementById('heatmapGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  const dateSet = new Set(state.entries.map(function (e) { return e.date; }));
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const end = new Date(today);
+  end.setDate(end.getDate() + (6 - end.getDay())); // Saturday of the current week
+  const start = new Date(end);
+  start.setDate(start.getDate() - (HEATMAP_WEEKS * 7 - 1)); // Sunday, HEATMAP_WEEKS back
+
+  const cursor = new Date(start);
+  for (let week = 0; week < HEATMAP_WEEKS; week++) {
+    const col = document.createElement('div');
+    col.className = 'heatmap-col';
+
+    for (let day = 0; day < 7; day++) {
+      const dateStr = toDateStr(cursor);
+      const isFuture = cursor > today;
+      const isToday = isSameDay(cursor, today);
+      const hasEntry = dateSet.has(dateStr);
+
+      let cell;
+      if (isFuture) {
+        cell = document.createElement('span');
+        cell.className = 'heatmap-cell heatmap-cell-future';
+      } else if (hasEntry) {
+        cell = document.createElement('button');
+        cell.type = 'button';
+        cell.className = 'heatmap-cell heatmap-cell-filled';
+        cell.title = formatDate(dateStr) + ' — entry written';
+        cell.addEventListener('click', function () {
+          const match = state.entries.find(function (e) { return e.date === dateStr; });
+          if (match) openViewModal(match.id);
+        });
+      } else {
+        cell = document.createElement('span');
+        cell.className = 'heatmap-cell';
+        cell.title = formatDate(dateStr);
+      }
+      if (isToday) cell.classList.add('heatmap-cell-today');
+
+      col.appendChild(cell);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    grid.appendChild(col);
+  }
 }
 
 function computeStats(entries) {
@@ -339,7 +441,7 @@ function renderEntriesList() {
     ));
     return;
   }
-  filtered.forEach(function (entry) { container.appendChild(renderEntryCard(entry)); });
+  filtered.forEach(function (entry, index) { container.appendChild(renderEntryCard(entry, index)); });
 }
 
 function getFilteredEntries() {
@@ -391,9 +493,10 @@ function clearFilters() {
 /* =====================================================================
    ENTRY CARD (built via DOM APIs — no innerHTML with user content)
    ===================================================================== */
-function renderEntryCard(entry) {
+function renderEntryCard(entry, index) {
   const card = document.createElement('article');
   card.className = 'entry-card';
+  card.style.setProperty('--stagger', String(index || 0));
   card.tabIndex = 0;
   card.setAttribute('role', 'button');
   card.setAttribute('aria-label', 'View entry: ' + entry.title);
@@ -403,6 +506,7 @@ function renderEntryCard(entry) {
 
   const mood = document.createElement('span');
   mood.className = 'entry-card-mood';
+  mood.style.background = MOOD_TINTS[entry.mood] || 'var(--surface-alt)';
   mood.textContent = entry.mood || '📝';
   header.appendChild(mood);
 

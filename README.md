@@ -178,6 +178,75 @@ prematurely.
 
 ---
 
+## 8. Modernization pass
+
+**Requested:** "enhance this system to be modern" — full creative latitude
+on direction ("surprise me — your best take").
+
+**Approach:** evolve the existing identity rather than replace it. The
+ink/amber/mist palette, the Newsreader/Inter/IBM Plex Mono type roles, and
+the day-arc signature visual all stay — they were deliberate choices from
+the initial build, not template defaults to discard. One early instinct
+(warming the background toward cream) was caught and reversed specifically
+*because* it would have walked the design into the generic "cream +
+terracotta" AI-template look the original build already went out of its way
+to avoid — so the mist/ink family stayed cool, and the modernization energy
+went into depth, structure, and motion instead.
+
+**Visual changes, almost entirely in `styles.css`:**
+
+- **Floating glass header and bottom nav** — inset from the screen edges
+  with rounded corners, a translucent `background` + `backdrop-filter:
+  blur()`, instead of full-bleed bars. Pure CSS (`position`, `margin`,
+  `border-radius`); no HTML restructure needed since both were already
+  `position: sticky` / `position: fixed`.
+- **Subtle grain texture** — an SVG-noise data URI blended onto `body` via
+  `background-blend-mode`, motivated by the journal's own subject matter
+  (paper has texture) rather than added as decoration for its own sake.
+  Layered directly on `body`'s existing background, so no extra DOM element
+  or z-index bookkeeping.
+- **Refined stat cards** — tinted icon chips per stat (`nth-child`, no HTML
+  change since the four cards are in a fixed order), monospace values with
+  a short ease-out count-up animation on load.
+- **Entry cards** — the mood emoji now sits on a soft tinted badge
+  (`MOOD_TINTS` in `script.js`, reusing existing color tokens), cards fade/
+  slide in with a staggered entrance, hover state gained more lift.
+- **Modals** — desktop: scale-and-fade instead of a flat pop; mobile: a
+  decorative drag-handle pill via `.modal::before` (CSS-only) so the
+  existing bottom-sheet behavior reads more clearly as one.
+- Buttons, inputs, the mood picker, toasts, and the search field (icon via
+  `background-image`, no wrapper element) all got matching treatment:
+  softer radii, warmer/tinted shadows, spring-eased transitions.
+
+**New feature — the consistency heatmap:** a contributions-graph-style grid
+on the dashboard (`renderHeatmap()` in `script.js`), showing the last 18
+weeks. A filled cell means an entry exists that day; filled cells are real
+`<button>`s that open that entry, empty/future cells are inert `<span>`s so
+keyboard and screen-reader users aren't forced through 100+ do-nothing
+stops. If the day-arc answers "where are we in *today*," this answers
+"where are we in the *habit*" — a companion signature rather than a second
+one competing for attention. This was the one change that needed new
+markup: a single `.heatmap-card` block inserted into `index.html` right
+after the stats grid. Month-by-month column labels (GitHub's style) were
+deliberately left out — getting them pixel-aligned above the correct week
+column in a horizontally-scrolling flex layout is fiddly, and a
+misaligned label is worse than none; a "Last 18 weeks" caption plus a
+two-swatch legend covers it without that risk.
+
+**Deliberately left unchanged:** the API/CRUD layer, `CONFIG` (including
+the live `API_URL`/`API_KEY` — verified byte-identical against the previous
+version after editing), the data model, event bindings, filtering/search
+logic, the tag system, and `Code.gs` (out of scope for this pass — not
+re-supplied to edit). `script.js` was edited surgically — targeted
+additions plus two small modified functions — rather than regenerated, so
+none of that working logic, or the real deployed URL sitting in `CONFIG`,
+could drift from a full rewrite. Verified after editing: `node --check`,
+every `getElementById` target cross-referenced against the HTML, every
+class name the new JS creates cross-referenced against the new CSS, no
+duplicate ids.
+
+---
+
 ## Current file set
 
 | File | Role |
@@ -187,9 +256,3 @@ prematurely.
 | `script.js` | All application logic |
 | `Code.gs` | Apps Script backend — paste into the Apps Script editor |
 | `README.md` | Setup guide, security notes, troubleshooting |
-
-## Known gap
-
-`README.md`'s file table still describes the pre-split, single-`index.html`
-layout — it hasn't been updated to mention `styles.css`/`script.js` as
-separate files. Worth a pass before treating the README as fully current.
