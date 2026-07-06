@@ -44,6 +44,10 @@ const MOOD_TINTS = {
 
 const HEATMAP_WEEKS = 18;
 
+/* Column order for CSV/JSON export — mirrors Code.gs's HEADERS exactly, so
+   an exported file's columns line up with the Google Sheet itself. */
+const EXPORT_COLUMNS = ['id', 'timestamp', 'date', 'title', 'content', 'mood', 'tags', 'location', 'lastModified'];
+
 /* =====================================================================
    INITIALIZATION
    ===================================================================== */
@@ -488,6 +492,163 @@ function clearFilters() {
   document.getElementById('dateFilter').value = '';
   document.getElementById('tagFilter').value = '';
   renderEntriesList();
+}
+
+/* =====================================================================
+   EXPORT / PRINT — operates on whatever getFilteredEntries() currently
+   returns. With no search/date/tag filter active that's every entry, so
+   this doubles as "export everything" with no separate UI path to
+   maintain; with a filter active it exports/prints just that subset.
+   Entirely client-side — no Code.gs changes needed, since the data is
+   already sitting in state.entries from the existing 'list' call.
+   ===================================================================== */
+function downloadBlob(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+}
+
+function exportFilenameDate() {
+  return toDateStr(new Date());
+}
+
+function entryCountLabel(entries) {
+  return entries.length + (entries.length === 1 ? ' entry' : ' entries');
+}
+
+function exportAsJSON() {
+  const entries = getFilteredEntries();
+  if (!entries.length) { showToast('No entries to export.', 'error'); return; }
+  downloadBlob(
+    JSON.stringify(entries, null, 2),
+    'daily-journal-' + exportFilenameDate() + '.json',
+    'application/json'
+  );
+  showToast('Exported ' + entryCountLabel(entries) + ' as JSON.', 'success');
+}
+
+/**
+ * RFC4180-style field escaping: wrap in quotes (doubling any internal
+ * quotes) whenever a value contains a comma, quote, or line break — entry
+ * content and tags routinely contain all three.
+ */
+function csvEscapeField(value) {
+  const str = value === null || value === undefined ? '' : String(value);
+  if (/[",\n\r]/.test(str)) {
+    return '"' + str.replace(/"/g, '""') + '"';
+  }
+  return str;
+}
+
+function exportAsCSV() {
+  const entries = getFilteredEntries();
+  if (!entries.length) { showToast('No entries to export.', 'error'); return; }
+
+  const rows = [EXPORT_COLUMNS.join(',')];
+  entries.forEach(function (entry) {
+    rows.push(EXPORT_COLUMNS.map(function (col) { return csvEscapeField(entry[col]); }).join(','));
+  });
+
+  // Leading BOM so Excel opens the UTF-8 file correctly (moods are emoji,
+  // content/tags are free-text) instead of mangling non-ASCII bytes.
+  downloadBlob(
+    '\uFEFF' + rows.join('\r\n'),
+    'daily-journal-' + exportFilenameDate() + '.csv',
+    'text/csv;charset=utf-8'
+  );
+  showToast('Exported ' + entryCountLabel(entries) + ' as CSV.', 'success');
+}
+
+/**
+ * Builds one <article class="print-entry">. DOM APIs only, consistent
+ * with this file's existing "no innerHTML with user content" rule (see
+ * the ENTRY CARD section below).
+ */
+function buildPrintEntry(entry) {
+  const article = document.createElement('article');
+  article.className = 'print-entry';
+
+  const h2 = document.createElement('h2');
+  h2.textContent = entry.title;
+  article.appendChild(h2);
+
+  const meta = document.createElement('div');
+  meta.className = 'print-entry-meta';
+  meta.textContent = [formatDate(entry.date) + ' (' + entry.date + ')', entry.mood].filter(Boolean).join('  ·  ');
+  article.appendChild(meta);
+
+  const tags = parseTags(entry.tags);
+  if (tags.length) {
+    const tagsEl = document.createElement('div');
+    tagsEl.className = 'print-entry-tags';
+    tagsEl.textContent = tags.map(function (t) { return '#' + t; }).join('   ');
+    article.appendChild(tagsEl);
+  }
+
+  if (entry.location) {
+    const loc = document.createElement('div');
+    loc.className = 'print-entry-location';
+    loc.textContent = '📍 ' + entry.location;
+    article.appendChild(loc);
+  }
+
+  const content = document.createElement('div');
+  content.className = 'print-entry-content';
+  content.textContent = entry.content;
+  article.appendChild(content);
+
+  return article;
+}
+
+/**
+ * Populates the hidden #printArea and opens the browser print dialog.
+ * #printArea is display:none on screen at all times — only the
+ * @media print rules in styles.css ever reveal it, and only on paper.
+ */
+function printEntries(entries, heading) {
+  if (!entries.length) { showToast('No entries to print.', 'error'); return; }
+
+  const printArea = document.getElementById('printArea');
+  printArea.innerHTML = '';
+
+  const header = document.createElement('div');
+  header.className = 'print-header';
+  const h1 = document.createElement('h1');
+  h1.textContent = '📔 Daily Journal';
+  const sub = document.createElement('p');
+  sub.textContent = heading + '  ·  Printed ' + new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  header.appendChild(h1);
+  header.appendChild(sub);
+  printArea.appendChild(header);
+
+  entries.forEach(function (entry) { printArea.appendChild(buildPrintEntry(entry)); });
+
+  window.print();
+}
+
+function printFilteredEntries() {
+  const entries = getFilteredEntries();
+  printEntries(entries, entryCountLabel(entries));
+}
+
+function printSingleEntry(id) {
+  const entry = state.entries.find(function (e) { return e.id === id; });
+  if (!entry) return;
+  printEntries([entry], '1 entry');
+}
+
+function toggleExportMenu(show) {
+  const menu = document.getElementById('exportMenu');
+  const btn = document.getElementById('exportMenuBtn');
+  const willShow = show !== undefined ? show : menu.classList.contains('hidden');
+  menu.classList.toggle('hidden', !willShow);
+  btn.setAttribute('aria-expanded', String(willShow));
 }
 
 /* =====================================================================
@@ -941,9 +1102,26 @@ function handleGlobalKeydown(e) {
     document.getElementById('entryForm').requestSubmit();
     return;
   }
-  if (e.key === 'Escape' && anyModalOpen()) {
-    closeAllModals();
-    return;
+  if (e.key === 'Escape') {
+    const menu = document.getElementById('exportMenu');
+    if (menu && !menu.classList.contains('hidden')) { toggleExportMenu(false); return; }
+    if (anyModalOpen()) { closeAllModals(); return; }
+  }
+  const isPrintCombo = (e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P');
+  if (isPrintCombo) {
+    const viewOpen = !document.getElementById('viewEntryModal').classList.contains('hidden');
+    if (viewOpen && state.currentViewId) {
+      e.preventDefault();
+      printSingleEntry(state.currentViewId);
+      return;
+    }
+    if (!formOpen && state.currentView === 'entries') {
+      e.preventDefault();
+      printFilteredEntries();
+      return;
+    }
+    // Anything else (e.g. the entry form open) is ambiguous — fall
+    // through to the browser's own print behavior instead of guessing.
   }
   if (e.key === 'n' && !isTypingInField(e.target) && !anyModalOpen()) {
     e.preventDefault();
@@ -1006,12 +1184,30 @@ function bindEvents() {
 
   document.getElementById('editEntryBtn').addEventListener('click', function () { openEditModal(state.currentViewId); });
   document.getElementById('deleteEntryBtn').addEventListener('click', function () { openConfirmDelete(state.currentViewId); });
+  document.getElementById('printEntryBtn').addEventListener('click', function () { printSingleEntry(state.currentViewId); });
   document.getElementById('confirmDeleteBtn').addEventListener('click', confirmDelete);
 
   document.getElementById('searchInput').addEventListener('input', debounce(renderEntriesList, 200));
   document.getElementById('dateFilter').addEventListener('change', renderEntriesList);
   document.getElementById('tagFilter').addEventListener('change', renderEntriesList);
   document.getElementById('clearFiltersBtn').addEventListener('click', clearFilters);
+
+  document.getElementById('exportMenuBtn').addEventListener('click', function (e) {
+    e.stopPropagation();
+    toggleExportMenu();
+  });
+  document.querySelectorAll('.export-menu-item').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      toggleExportMenu(false);
+      const action = btn.dataset.action;
+      if (action === 'json') exportAsJSON();
+      else if (action === 'csv') exportAsCSV();
+      else if (action === 'print') printFilteredEntries();
+    });
+  });
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.export-menu-wrap')) toggleExportMenu(false);
+  });
 
   document.getElementById('todayPromptBtn').addEventListener('click', openNewEntryModal);
   document.getElementById('retryBtn').addEventListener('click', loadEntries);

@@ -387,6 +387,24 @@ button.heatmap-cell:hover { transform: scale(1.3); }
 }
 #dateFilter, #tagFilter { flex: 1 1 140px; border-radius: var(--radius-sm); }
 
+/* ---- Export / print dropdown ---- */
+.export-menu-wrap { position: relative; }
+.export-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 40;
+  min-width: 190px; padding: 6px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  display: flex; flex-direction: column; gap: 2px;
+  animation: modalPop 160ms var(--ease-spring);
+}
+.export-menu-item {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  border: none; background: none; font-size: 13.5px; font-weight: 500; color: var(--text-primary);
+  padding: 9px 11px; border-radius: var(--radius-sm); cursor: pointer;
+  transition: background var(--transition);
+}
+.export-menu-item:hover { background: var(--surface-alt); }
+
 .entries-list { display: flex; flex-direction: column; gap: 12px; }
 
 /* =====================================================================
@@ -490,6 +508,7 @@ button.heatmap-cell:hover { transform: scale(1.3); }
 .modal-close:hover { background: var(--border); }
 
 .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+.footer-btn-left { margin-right: auto; } /* pins a button to the left edge of a flex-end footer */
 
 .view-entry-meta { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; font-size: 13px; color: var(--text-secondary); }
 .view-entry-meta .meta-date { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; }
@@ -609,4 +628,38 @@ button.heatmap-cell:hover { transform: scale(1.3); }
     animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important; scroll-behavior: auto !important;
   }
+}
+
+/* =====================================================================
+   PRINT — #printArea is populated just-in-time by printEntries() /
+   printSingleEntry() in script.js. It's display:none for the screen at
+   all times; only the rules below ever reveal it, and only on paper.
+   ===================================================================== */
+#printArea { display: none; }
+
+@media print {
+  body * { visibility: hidden !important; }
+  #printArea, #printArea * { visibility: visible !important; }
+  #printArea {
+    display: block !important;
+    position: absolute; top: 0; left: 0; width: 100%;
+    margin: 0; padding: 0; background: #fff; color: #000;
+  }
+
+  .print-header { margin-bottom: 24px; border-bottom: 2px solid #000; padding-bottom: 12px; }
+  .print-header h1 { font-family: var(--font-display); font-size: 22px; margin: 0 0 4px; }
+  .print-header p { font-family: var(--font-sans); font-size: 11px; color: #444; margin: 0; }
+
+  .print-entry {
+    break-inside: avoid; page-break-inside: avoid;
+    margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid #ccc;
+  }
+  .print-entry:last-child { border-bottom: none; }
+  .print-entry h2 { font-family: var(--font-display); font-size: 16px; margin: 0 0 4px; }
+  .print-entry-meta {
+    font-family: var(--font-mono); font-size: 10.5px; color: #444;
+    text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;
+  }
+  .print-entry-tags, .print-entry-location { font-family: var(--font-sans); font-size: 11px; color: #555; margin-bottom: 4px; }
+  .print-entry-content { font-family: var(--font-sans); font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; color: #000; margin-top: 8px; }
 }

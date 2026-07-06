@@ -247,6 +247,97 @@ duplicate ids.
 
 ---
 
+## 9. Fix: tag chips not appearing on mobile
+
+**Reported with:** a screenshot of the entry form on iOS Safari — the Tags
+field showing only the "Type a tag, press Enter…" input, no chips above it,
+where the same entry rendered chips correctly on desktop.
+
+**Investigation:** couldn't reproduce this directly — the sandbox this runs
+in can't reach a real browser to render the page (Ubuntu's `chromium`
+package is a Snap stub, and the Snap store isn't reachable from here), so
+this was diagnosed by reading the CSS rather than watching it fail. The
+suspect: `#tagChips` (the div `renderTagChips()` fills with `.tag-chip`
+pills) is a flex item inside `.tags-input-wrapper`, sitting next to
+`#tagInput`, and never had `min-width: 0` or its own `display: flex`. Flex
+items default to `min-width: auto` — "never shrink below your content's
+natural size" — which a wide desktop window has enough slack to hide, but a
+narrow phone screen often doesn't. Sizing at that particular edge (a flex
+item that's also a flex container, competing with a shrinking sibling) is
+somewhere WebKit/Safari has a real history of diverging from Chrome/
+Firefox, which lines up with "desktop fine, mobile broken" better than
+anything else found. A second, smaller issue in the same spot: the generic
+`.form-row input[type="text"] { width: 100%; }` rule also matches
+`#tagInput` and was left to contend with its own `flex-basis` for sizing —
+not obviously broken on its own, but ambiguous, and cheap to close off
+while in there.
+
+**Fix:** `#tagChips` now gets its own explicit `display: flex; flex-wrap:
+wrap; min-width: 0;` so it's forced to shrink and wrap its chips internally
+on narrow screens instead of holding out for its natural width. `#tagInput`
+now sets `width: auto` directly, so there's no competition with the generic
+`width: 100%` rule regardless of how a given browser resolves flex-basis vs.
+width. Verified: CSS brace balance, no other spot in the stylesheet has the
+same nested flex-item/flex-container pattern (`#viewEntryTags` and
+`.entry-card-footer` are both direct flex containers for their tag chips,
+not a div-within-a-flex-row competing with a shrinking sibling, so neither
+needed the same fix).
+
+**Flagged honestly:** this is the most plausible cause found by reading the
+CSS carefully, not a confirmed-by-reproduction root cause — there was no way
+to actually watch it fail and then verify the fix on a real phone from this
+environment. If chips still don't show after this, the next thing worth
+checking is whether it happens live while typing a brand-new tag, or only
+for tags already saved on an entry being edited — that split would point
+either back at layout (this fix) or at the `keydown`/`blur` handlers that
+add a tag in `handleTagInputKeydown()`.
+
+---
+
+## 10. Feature: print & export
+
+**Requested:** a way to print entries and export the underlying data out of
+the app.
+
+**Approach:** entirely client-side — `state.entries` is already the full
+result of the existing `list` call, so nothing in `Code.gs` needed to
+change (no redeploy required for this feature). A new **Export ▾** dropdown
+was added next to **Clear** in the All Entries filter bar, with three
+actions that all operate on whatever `getFilteredEntries()` currently
+returns — every entry if no search/date/tag filter is active, just the
+matching subset if one is:
+
+- **Export as JSON** — `JSON.stringify(entries, null, 2)`, downloaded as
+  `daily-journal-YYYY-MM-DD.json`. Full fidelity backup, same field order
+  as the Sheet (`EXPORT_COLUMNS` mirrors `Code.gs`'s `HEADERS`).
+- **Export as CSV** — same columns, RFC4180-style escaping
+  (`csvEscapeField()`) for the commas/quotes/line-breaks that entry content
+  and multi-tag lists routinely contain, `\r\n` row endings, and a leading
+  UTF-8 BOM so Excel doesn't mangle mood emoji or non-ASCII text on open.
+- **Print** — builds a clean, readable rendering (date, mood, tags,
+  location, content) into a `#printArea` element that's `display:none` on
+  screen and only ever revealed by a `@media print` block in `styles.css`
+  (the standard "hide everything except #printArea" trick), then calls
+  `window.print()`. Each entry gets `break-inside: avoid` so it won't split
+  across a page boundary.
+
+A matching **🖨️ Print** button was added to the View Entry modal for
+printing a single entry, and `Ctrl`/`Cmd`+`P` is intercepted globally to
+route to the right one (single entry if the view modal is open, the
+current filtered list if on the Entries view) rather than let the browser
+print a blank-looking page — it only falls through to default browser
+print behavior in the one genuinely ambiguous case (the create/edit form
+open, where there's no saved entry yet to print).
+
+**Files touched:** `index.html` (export dropdown markup, print button,
+`#printArea`), `script.js` (export/print/menu logic, ~150 lines, inserted
+after the existing filter functions since export/print directly extend
+them), `styles.css` (dropdown styling, a `.footer-btn-left` helper to pin
+the print button left in the modal footer, and the print stylesheet).
+`Code.gs` deliberately untouched.
+
+---
+
 ## Current file set
 
 | File | Role |

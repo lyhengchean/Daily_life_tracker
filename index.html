@@ -127,6 +127,14 @@
           <option value="">All tags</option>
         </select>
         <button id="clearFiltersBtn" class="btn btn-ghost btn-sm">Clear</button>
+        <div class="export-menu-wrap">
+          <button type="button" id="exportMenuBtn" class="btn btn-ghost btn-sm" aria-haspopup="true" aria-expanded="false" title="Export or print entries (respects current filters)">Export ▾</button>
+          <div id="exportMenu" class="export-menu hidden" role="menu">
+            <button type="button" class="export-menu-item" data-action="json" role="menuitem">📄 Export as JSON</button>
+            <button type="button" class="export-menu-item" data-action="csv" role="menuitem">📊 Export as CSV</button>
+            <button type="button" class="export-menu-item" data-action="print" role="menuitem">🖨️ Print</button>
+          </div>
+        </div>
       </div>
       <div id="allEntriesList" class="entries-list"></div>
     </section>
@@ -225,6 +233,7 @@
       <div id="viewEntryTags"></div>
       <div id="viewEntryContent" class="view-entry-content"></div>
       <div class="modal-footer">
+        <button id="printEntryBtn" class="btn btn-ghost footer-btn-left" title="Print this entry (Ctrl/Cmd+P)">🖨️ Print</button>
         <button id="deleteEntryBtn" class="btn btn-ghost">Delete</button>
         <button id="editEntryBtn" class="btn btn-primary">Edit</button>
       </div>
@@ -252,6 +261,9 @@
   </div>
 
 </div>
+
+<!-- ================= PRINT AREA (JS-populated; visible only when printing) ================= -->
+<div id="printArea" class="print-area"></div>
 
 <script src="script.js"></script>
 </body>
